@@ -15,7 +15,7 @@ $runtype = ($testnet) ? 'testnet' : 'mainnet';
 
 require_once(__DIR__ . '/../../includes/config.php');
 
-// Initialize the database and counterparty API connections
+// Initialize the database and unoparty API connections
 initDB(DB_HOST, DB_USER, DB_PASS, DB_DATA, true);
 
 //

@@ -22,7 +22,7 @@ $single  = (isset($args['single'])) ? true : false;
 
 require_once(__DIR__ . '/../includes/config.php');
 
-// Initialize the database and counterparty API connections
+// Initialize the database and unoparty API connections
 initDB(DB_HOST, DB_USER, DB_PASS, DB_DATA, true);
 
 // If no block number is given, assume user wants to check all blocks and lookup first block in messages table

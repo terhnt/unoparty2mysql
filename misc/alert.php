@@ -1,9 +1,9 @@
 #!/usr/bin/env php
 <?php
 /*********************************************************************
- * alert.php 
- * 
- * Handle monitoring DB and sending alert if no blocks for the last hour 
+ * alert.php
+ *
+ * Handle monitoring DB and sending alert if no blocks for the last hour
  ********************************************************************/
 
 // Hide all but errors
@@ -20,7 +20,7 @@ require_once(__DIR__ . '/../includes/config.php');
 // Email and text alert info
 $email   = "user@email.com"; // Email address
 $sms     = "sms@email.com"; // SMS Email address
-$subject = "Counterparty2mysql Alert";
+$subject = "Unoparty2mysql Alert";
 $message = "No new blocks on {$runtype} in the last hour";
 
 // Initialize the database
@@ -45,4 +45,3 @@ if($results){
         mail($email, $subject, $message);
     }
 }
-

@@ -1,10 +1,10 @@
 #!/usr/bin/env php
 <?php
 /*********************************************************************
- * counterparty2mysql.php 
- * 
- * Script to handle parsing counterparty data into mysql database
- * 
+ * unoparty2mysql.php
+ *
+ * Script to handle parsing unoparty data into mysql database
+ *
  * Command line arguments :
  * --testnet    Load data from testnet
  * --regtest    Load data from regtest
@@ -21,7 +21,7 @@ error_reporting(E_ERROR);
 $args     = getopt("", array("testnet::", "regtest::", "block::", "rollback::", "single::","silent::", "verbose::"));
 $testnet  = (isset($args['testnet'])) ? true : false;
 $regtest  = (isset($args['regtest'])) ? true : false;
-$single   = (isset($args['single'])) ? true : false;  
+$single   = (isset($args['single'])) ? true : false;
 $silent   = (isset($args['silent'])) ? true : false; // Flag to indicate if we should silently fail on insert errors
 $runtype  = ($regtest) ? 'regtest' : (($testnet) ? 'testnet' : 'mainnet');
 $rollback = (is_numeric($args['rollback'])) ? intval($args['rollback']) : false;
@@ -31,11 +31,11 @@ $block    = (is_numeric($args['block'])) ? intval($args['block']) : false;
 require_once(__DIR__ . '/includes/config.php');
 
 // Define some constants used for locking processes and logging errors
-define("LOCKFILE", '/var/tmp/counterparty2mysql-' . $runtype . '.lock');
-define("LASTFILE", '/var/tmp/counterparty2mysql-' . $runtype . '.last-block');
-define("ERRORLOG", '/var/tmp/counterparty2mysql-' . $runtype . '.errors');
+define("LOCKFILE", '/var/tmp/unoparty2mysql-' . $runtype . '.lock');
+define("LASTFILE", '/var/tmp/unoparty2mysql-' . $runtype . '.last-block');
+define("ERRORLOG", '/var/tmp/unoparty2mysql-' . $runtype . '.errors');
 
-// Initialize the database and counterparty API connections
+// Initialize the database and unoparty API connections
 initDB(DB_HOST, DB_USER, DB_PASS, DB_DATA, true);
 initCP(CP_HOST, CP_USER, CP_PASS, true);
 
@@ -47,7 +47,7 @@ if($rollback){
     $block_index = $mysqli->real_escape_string($rollback);
     $tables = [
         'bets',
-        'bet_expirations', 
+        'bet_expirations',
         'bet_match_expirations',
         'bet_match_resolutions',
         'bet_matches',
@@ -90,12 +90,12 @@ if($rollback){
 // If no block given, load last block from state file, or use first block with CP tx
 if(!$block){
     $last  = file_get_contents(LASTFILE);
-    $first = ($regtest) ? 1 : (($testnet) ? 310000 : 278270);
+    $first = ($regtest) ? 1 : (($testnet) ? 700 : 1777464);
     $block = (isset($last) && $last>=$first) ? (intval($last) + 1) : $first;
 }
 
 // Get the current block index from status info
-$current = $counterparty->status['last_block']['block_index'];
+$current = $unoparty->status['last_block']['block_index'];
 
 // Define array of fields that contain assets, addresses, transactions, and contracts
 $fields_asset       = array('asset', 'backward_asset', 'dividend_asset', 'forward_asset', 'get_asset', 'give_asset');
@@ -118,8 +118,8 @@ while($block <= $current){
     $transactions = array(); // array of transaction id mappings
     $contracts    = array(); // array of contract id mappings
 
-    // Get list of messages (updates to counterparty tables)
-    $messages = $counterparty->execute('get_messages', array('block_index' => $block));
+    // Get list of messages (updates to unoparty tables)
+    $messages = $unoparty->execute('get_messages', array('block_index' => $block));
     // Loop through messages and create assets, addresses, transactions and setup id mappings
     foreach($messages as $message){
         $msg = (object) $message;
@@ -154,7 +154,7 @@ while($block <= $current){
     foreach($addresses as $address => $address_id)
         updateAddressBalance($address, array_keys($assets));
 
-    // Loop through the messages and create/update the counterparty tables
+    // Loop through the messages and create/update the unoparty tables
     foreach($messages as $message){
         $msg      = (object) $message;
         $table    = $msg->category;
@@ -193,7 +193,7 @@ while($block <= $current){
             $safe_value = preg_replace("/[^[:alnum:][:space:]]/u", '', $value);
             if($field=='description')
                 $value = $safe_value;
-            // Encode some values to make safe for SQL queries  
+            // Encode some values to make safe for SQL queries
             if($table=='broadcasts' && $field=='text')
                 $value = $mysqli->real_escape_string($safe_value);
             if($table=='issuances' && $field=='description')
@@ -239,9 +239,9 @@ while($block <= $current){
                 $field = 'gas_start';
             if($field=='payload')
                 $field = 'data';
-            // Escape key/value field names to prevent sql errors 
+            // Escape key/value field names to prevent sql errors
             if($field=='key')
-                $field = '`key`';            
+                $field = '`key`';
             if($field=='value')
                 $field = '`value`';
             // Handle ignoring certain items in the bindings that cause issues
@@ -324,7 +324,7 @@ while($block <= $current){
                         $where .= " AND ";
                     $where .= " tx_hash_id='{$values[$index]}'";
                 // Update *_matches tables using id field
-                } else if(in_array($table,array('order_matches','bet_matches','rps_matches')) && 
+                } else if(in_array($table,array('order_matches','bet_matches','rps_matches')) &&
                           in_array($field,array('order_match_id','bet_match_id','rps_match_id'))){
                     $where .= " id='{$values[$index]}'";
                 // Update rps table using tx_hash or tx_index
@@ -363,12 +363,12 @@ while($block <= $current){
 
     }
 
-    // Loop through assets and update XCP price 
+    // Loop through assets and update XUP price
     foreach($assets as $asset =>$id)
         updateAssetPrice($asset);
 
     // array of markets
-    $markets = array(); 
+    $markets = array();
 
     // Loop through messages and detect any DEX market changes
     foreach($messages as $message){
@@ -420,7 +420,7 @@ while($block <= $current){
 
     // Increase block before next loop
     $block++;
-}    
+}
 
 // Remove the lockfile now that we are done running
 removeLockFile();

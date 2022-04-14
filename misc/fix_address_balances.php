@@ -15,7 +15,7 @@ $runtype = ($testnet) ? 'testnet' : 'mainnet';
 
 require_once(__DIR__ . '/../includes/config.php');
 
-// Initialize the database and counterparty API connections
+// Initialize the database and unoparty API connections
 initDB(DB_HOST, DB_USER, DB_PASS, DB_DATA, true);
 initCP(CP_HOST, CP_USER, CP_PASS, true);
 
@@ -34,12 +34,12 @@ foreach($addresses as $address){
     // Lookup any balance for this address and asset
     $filters  = array(array('field' => 'address', 'op' => '==', 'value' => $address));
     $offset   = 0;
-    $data     = $counterparty->execute('get_balances', array('filters' => $filters));
+    $data     = $unoparty->execute('get_balances', array('filters' => $filters));
     $balances = $data;
     
     // Loop until we get all balances
     while(count($data)==1000){
-        $data     = $counterparty->execute('get_balances', array('filters' => $filters, 'offset' => count($balances)));
+        $data     = $unoparty->execute('get_balances', array('filters' => $filters, 'offset' => count($balances)));
         $balances = array_merge($balances, $data);
     }
 

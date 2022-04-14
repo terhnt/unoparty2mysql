@@ -3,7 +3,7 @@
 /*********************************************************************
  * update_market_info.php 
  * 
- * Script to handle creating/updating counterparty DEX market pairs
+ * Script to handle creating/updating unoparty DEX market pairs
  * Note: BCMath is used extensively to prevent rounding issues
  * 
  * Command line arguments :

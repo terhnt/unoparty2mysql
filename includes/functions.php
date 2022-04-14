@@ -60,18 +60,18 @@ function initDB($hostname=null, $username=null, $password=null, $database=null, 
 }
 
 
-// Setup Counterparty API connection
+// Setup Unoparty API connection
 function initCP($hostname=null, $username=null, $password=null, $log=false){
-    global $counterparty;
-    $counterparty = new Client($hostname);
-    $counterparty->authentication($username, $password);
-    $status = $counterparty->execute('get_running_info');
+    global $unoparty;
+    $unoparty = new Client($hostname);
+    $unoparty->authentication($username, $password);
+    $status = $unoparty->execute('get_running_info');
     // If we have a successfull response, store it in 'status'
     if(isset($status)){
-        $counterparty->status = $status;
+        $unoparty->status = $status;
     } else {
         // If we failed to establish a connection, bail out
-        $msg = 'Counterparty Connection Failure';
+        $msg = 'Unoparty Connection Failure';
         if($log){
             byeLog($msg);
         } else {
@@ -98,7 +98,7 @@ function getAssetDatabaseId($asset=null){
 // Big thanks to Joe looney <hello@joelooney.org> for pointing me towards his similar javascript function
 function getAssetId($asset=null){
     $id = false;
-    if($asset == 'XCP'){
+    if($asset == 'XUP'){
         $id =  1;
     } else if(substr($asset,0,1)=='A'){
         $id = substr($asset,1);
@@ -106,7 +106,7 @@ function getAssetId($asset=null){
         $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         $array = str_split($asset);
         $n = 0;
-        for ($i = 0; $i < count($array); $i++) { 
+        for ($i = 0; $i < count($array); $i++) {
             $n *= 26;
             $n += strpos($chars, $array[$i]);
         }
@@ -118,8 +118,8 @@ function getAssetId($asset=null){
 
 // Create/Update records in the 'blocks' table and return record id
 function createBlock( $block_index=null ){
-    global $mysqli, $counterparty;
-    $data = (object) $counterparty->execute('get_block_info', array('block_index' => $block_index));
+    global $mysqli, $unoparty;
+    $data = (object) $unoparty->execute('get_block_info', array('block_index' => $block_index));
     $data->block_hash_id          = createTransaction($data->block_hash);
     $data->previous_block_hash_id = createTransaction($data->previous_block_hash);
     $data->ledger_hash_id         = createTransaction($data->ledger_hash);
@@ -172,9 +172,9 @@ function createBlock( $block_index=null ){
 
 // Create/Update records in the 'assets' table and return record id
 function createAsset( $asset=null, $block_index=null ){
-    global $mysqli, $counterparty;
+    global $mysqli, $unoparty;
     // Get current information on this asset
-    $info = $counterparty->execute('get_asset_info', array('assets' => array($asset)));
+    $info = $unoparty->execute('get_asset_info', array('assets' => array($asset)));
     // Create data object using asset info (if any)
     $data                 = (count($info)) ? (object) $info[0] : (object) [];
     $description          = substr($data->description,0,250); // Truncate to 250 chars
@@ -193,7 +193,7 @@ function createAsset( $asset=null, $block_index=null ){
     if(count($info)==0)
         $data->type = 4;
     // Force numeric values for special assets
-    if(in_array($data->asset, array('XCP','BTC'))){
+    if(in_array($data->asset, array('XUP','UNO'))){
         $data->issuer_id = 0;
         $data->owner_id  = 0;
     }
@@ -428,7 +428,7 @@ function createTxIndex( $tx_index=null, $block_index=null, $tx_type=null, $tx_ha
 
 // Create/Update records in the 'balances' table
 function updateAddressBalance( $address=null, $asset_list=null ){
-    global $mysqli, $counterparty, $addresses, $assets;
+    global $mysqli, $unoparty, $addresses, $assets;
     // Lookup any balance for this address and asset
     $balances = getAddressBalances($address, $asset_list);
     if(count($balances)){
@@ -461,7 +461,7 @@ function updateAddressBalance( $address=null, $asset_list=null ){
 
 // Handle requesting address balance information for a given address and list of assets
 function getAddressBalances($address=null, $asset_list=null){
-    global $counterparty;
+    global $unoparty;
     $balances = array();
     // Break asset list up into chunks of 500 (API calls with more than 500 assets fail)
     $asset_list   = array_chunk($asset_list, 500);
@@ -469,7 +469,7 @@ function getAddressBalances($address=null, $asset_list=null){
         // Lookup any balance for this address and asset
         $filters  = array(array('field' => 'address', 'op' => '==', 'value' => $address),
                           array('field' => 'asset',   'op' => 'IN', 'value' => $assets));
-        $data = $counterparty->execute('get_balances', array('filters' => $filters, 'filterop' => "AND"));
+        $data = $unoparty->execute('get_balances', array('filters' => $filters, 'filterop' => "AND"));
         if(count($data)){
             $balances = array_merge($balances, $data);
         }
@@ -478,10 +478,10 @@ function getAddressBalances($address=null, $asset_list=null){
 }
 
 
-// Handle updating asset with latest XCP price from DEX
+// Handle updating asset with latest XUP price from DEX
 function updateAssetPrice( $asset=null ){
     global $mysqli;
-    // Lookup asset id 
+    // Lookup asset id
     $asset   = $mysqli->real_escape_string($asset);
     $results = $mysqli->query("SELECT id, divisible FROM assets WHERE asset='{$asset}'");
     if($results && $results->num_rows){
@@ -491,10 +491,10 @@ function updateAssetPrice( $asset=null ){
     } else {
         byeLog('Error looking up asset id');
     }
-    // Bail out on BTC or XCP
+    // Bail out on UNO or XUP
     if($asset_id<=2)
         return;
-    // Lookup last order match for XCP
+    // Lookup last order match for XUP
     $sql = "SELECT
                 m.forward_asset_id,
                 m.forward_quantity,
@@ -506,8 +506,8 @@ function updateAssetPrice( $asset=null ){
                 ((m.forward_asset_id=2 AND m.backward_asset_id='{$asset_id}') OR
                 ( m.forward_asset_id='{$asset_id}' AND m.backward_asset_id=2)) AND
                 m.status='completed'
-            ORDER BY 
-                m.tx1_index DESC 
+            ORDER BY
+                m.tx1_index DESC
             LIMIT 1";
     $results  = $mysqli->query($sql);
     if($results){
@@ -519,9 +519,9 @@ function updateAssetPrice( $asset=null ){
             $xxx_qty   = ($divisible) ? number_format($xxx_amt * 0.00000001,8,'.','') : number_format($xxx_amt,0,'.','');
             $price     = number_format($xcp_qty / $xxx_qty,8,'.','');
             $price_int = number_format($price * 100000000,0,'.','');
-            $results   = $mysqli->query("UPDATE assets SET xcp_price='{$price_int}' WHERE id='{$asset_id}'");
+            $results   = $mysqli->query("UPDATE assets SET xup_price='{$price_int}' WHERE id='{$asset_id}'");
             if(!$results)
-                byeLog('Error updating XCP price for asset ' . $asset);
+                byeLog('Error updating XUP price for asset ' . $asset);
         }
     } else {
         byeLog('Error while trying to lookup asset price');
@@ -542,13 +542,13 @@ function createUpdateMarkets($markets){
 function createMarket($asset1, $asset2){
     global $mysqli;
     // Check if the market already exists... if not, create it
-    $sql = "SELECT 
+    $sql = "SELECT
                 m.id
-            FROM 
+            FROM
                 markets m,
                 assets a1,
                 assets a2
-            WHERE 
+            WHERE
                 a1.id=m.asset1_id AND
                 a2.id=m.asset2_id AND
                 ((a1.asset='{$asset1}' AND a2.asset='{$asset2}') OR
@@ -560,7 +560,7 @@ function createMarket($asset1, $asset2){
             return $row['id'];
         } else {
             $asset1_id = getAssetDatabaseId($asset1);
-            $asset2_id = getAssetDatabaseId($asset2); 
+            $asset2_id = getAssetDatabaseId($asset2);
             $results   = $mysqli->query("INSERT INTO markets (asset1_id, asset2_id) values ('{$asset1_id}', '{$asset2_id}')");
             if($results && $mysqli->insert_id){
                 return $mysqli->insert_id;
@@ -644,7 +644,7 @@ function updateMarketInfo( $market_id ){
                 markets m,
                 assets a1,
                 assets a2
-            WHERE 
+            WHERE
                 a1.id=m.asset1_id AND
                 a2.id=m.asset2_id AND
                 m.id='{$market_id}'";
@@ -673,13 +673,13 @@ function updateMarketInfo( $market_id ){
             m.forward_quantity,
             m.backward_asset_id,
             m.backward_quantity
-        FROM 
+        FROM
             order_matches m
         WHERE
             ((m.forward_asset_id='{$asset1_id}' AND m.backward_asset_id='{$asset2_id}') OR
              (m.forward_asset_id='{$asset2_id}' AND m.backward_asset_id='{$asset1_id}')) AND
             m.status='completed'
-        ORDER BY tx1_index DESC 
+        ORDER BY tx1_index DESC
         LIMIT 1";
     // print $sql;
     $results = $mysqli->query($sql);
@@ -705,14 +705,14 @@ function updateMarketInfo( $market_id ){
             m.forward_quantity,
             m.backward_asset_id,
             m.backward_quantity
-        FROM 
+        FROM
             order_matches m
         WHERE
             ((m.forward_asset_id='{$asset1_id}' AND m.backward_asset_id='{$asset2_id}') OR
              (m.forward_asset_id='{$asset2_id}' AND m.backward_asset_id='{$asset1_id}')) AND
             m.status='completed' AND
             m.block_index<='{$block_24hr}'
-        ORDER BY tx1_index DESC 
+        ORDER BY tx1_index DESC
         LIMIT 1";
     // print $sql;
     $results = $mysqli->query($sql);
@@ -731,11 +731,11 @@ function updateMarketInfo( $market_id ){
     }
 
     // Lookup 'bid' price
-    $sql = "SELECT 
+    $sql = "SELECT
                 o.get_quantity,
                 o.give_quantity,
                 o.tx_index
-            FROM 
+            FROM
                 orders o
             WHERE
                 o.get_asset_id='{$asset1_id}' AND
@@ -765,11 +765,11 @@ function updateMarketInfo( $market_id ){
     }
 
     // Lookup 'ask' price
-    $sql = "SELECT 
+    $sql = "SELECT
                 o.get_quantity,
                 o.give_quantity,
                 o.tx_index
-            FROM 
+            FROM
                 orders o
             WHERE
                 o.get_asset_id='{$asset2_id}' AND
@@ -806,14 +806,14 @@ function updateMarketInfo( $market_id ){
             m.forward_quantity,
             m.backward_asset_id,
             m.backward_quantity
-        FROM 
+        FROM
             order_matches m
         WHERE
             ((m.forward_asset_id='{$asset1_id}' AND m.backward_asset_id='{$asset2_id}') OR
              (m.forward_asset_id='{$asset2_id}' AND m.backward_asset_id='{$asset1_id}')) AND
             m.status='completed' AND
             m.block_index>='{$block_24hr}'
-        ORDER BY tx1_index DESC";    
+        ORDER BY tx1_index DESC";
         // print $sql;
     $results = $mysqli->query($sql);
     if($results){
@@ -846,7 +846,7 @@ function updateMarketInfo( $market_id ){
         }
     } else {
         byeLog("Error while trying to lookup 24-hour stats");
-    }    
+    }
 
 
     // Calculate price change percentage
@@ -879,9 +879,9 @@ function updateMarketInfo( $market_id ){
     $asset2_volume_int = bcmul($asset2_volume, '100000000',0);
 
     // Update the market info
-    $sql = "UPDATE 
-                markets 
-            SET 
+    $sql = "UPDATE
+                markets
+            SET
                 price1_ask='{$price1_ask_int}',
                 price1_bid='{$price1_bid_int}',
                 price1_high='{$price1_high_int}',
@@ -899,7 +899,7 @@ function updateMarketInfo( $market_id ){
                 asset1_volume='{$asset1_volume_int}',
                 asset2_volume='{$asset2_volume_int}',
                 last_updated=now()
-            WHERE 
+            WHERE
                 id='{$market_id}'";
     // if($debug)
     //     print "{$sql}\n";
